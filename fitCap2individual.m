@@ -3,13 +3,13 @@ function [electrode_coord,center]= fitCap2individual(scalp,scalp_surface,landmar
 %
 % Place the electrodes with pre-defined coordinates in the standard EEG
 % system (e.g., 10/05, BioSemi, or EGI system).
-% 
+%
 % Landmarks follow the order of: nasion, inion, right, left, front neck,
 % and back neck.
 %
 % Note for the EGI layout, just directly project the coordinates onto the
 % scalp surface without adjusting.
-% 
+%
 % (c) Yu (Andy) Huang, Parra Lab at CCNY
 % yhuang16@citymail.cuny.edu
 % April 2018
@@ -25,6 +25,40 @@ left = landmarks(4,:);
 disp('measuring head size...')
 L = norm(inion-nasion); % Distance between nasion and inion
 line_center = (inion+nasion)/2; % Midpoint between nasion and inion
+
+% use fieldtrip functions to better warp electrodes to mesh
+if isEGI
+    ft_defaults;
+    % create surface
+    segmentedmri = [];
+    segmentedmri.dim = size(scalp);
+    segmentedmri.brain = scalp & ~scalp;
+    segmentedmri.skull = segmentedmri.brain;
+    segmentedmri.scalp = scalp;
+    segmentedmri.unit = 'mm';
+    segmentedmri.transform = eye(4);
+    segmentedmri.transform(1:3,4)=-size(scalp)/2;
+    segmentedmri.coordsys='mni';
+    
+    cfg = [];
+    cfg.spmversion = 'spm12';
+    cfg.tissue={'scalp'};
+    cfg.numvertices = [30000];
+    bnd = ft_prepare_mesh(cfg, segmentedmri);
+    
+    elec = ft_read_sens('GSN-HydroCel-257.sfp');
+    cfg=[];
+    cfg.method='project';
+    cfg.warp ='nonlin3';
+    cfg.elec=elec;
+    cfg.headshape=bnd;
+
+    elec_projected = ft_electroderealign(cfg);
+    elec_projected.chanpos = elec_projected.chanpos/100;
+    for ii=1:3
+        capInfo{ii+1} = elec_projected.chanpos(:,ii);
+    end
+end
 
 if ~isEGI
     centralSag = round(line_center(1));
@@ -128,6 +162,37 @@ for n = 1:length(factor)
     
     elec_adjusted = [elec_template';ones(1,size(elec_template,1))];
     elec_adjusted(3,:) = elec_adjusted(3,:)*factor(n);
+    
+    if isEGI
+        ft_defaults;
+        % create surface
+        segmentedmri = [];
+        segmentedmri.dim = size(scalp);
+        segmentedmri.brain = scalp & ~scalp;
+        segmentedmri.skull = segmentedmri.brain;
+        segmentedmri.scalp = scalp;
+        segmentedmri.unit = 'mm';
+        segmentedmri.transform = eye(4);
+        segmentedmri.transform(1:3,4)=-size(scalp)/2;
+        segmentedmri.coordsys='mni';
+
+        cfg = [];
+        cfg.spmversion = 'spm12';
+        cfg.tissue={'scalp'};
+        cfg.numvertices = [30000];
+        bnd = ft_prepare_mesh(cfg, segmentedmri);
+
+        elec = ft_read_sens('GSN-HydroCel-257.sfp');
+        cfg=[];
+        cfg.method='project';
+        cfg.warp ='nonlin3';
+        cfg.elec=elec;
+        cfg.headshape=bnd;
+
+        elec_projected = ft_electroderealign(cfg);
+        elec_projected.chanpos = elec_projected.chanpos/100;
+        elec_adjusted = [elec_projected.chanpos(indFit,:)'; ones(1, length(indFit))];
+    end
     % Adjust the z-coordinate correspondingly
     elec_transformed = affine * elec_adjusted;
     elec_transformed = elec_transformed(1:3,:)';
@@ -136,7 +201,7 @@ for n = 1:length(factor)
     idx = zeros(size(elec_transformed,1),1);
     [cosineAngle,indOnScalpSurf] = project2ClosestSurfacePoints(elec_transformed,scalp_surface,center);
     for i = 1:length(idx)
-%         testPts = scalp_surface(indOnScalpSurf(cosineAngle(:,i) > max(cosineAngle(:,i))*0.99993,i),:);
+        %         testPts = scalp_surface(indOnScalpSurf(cosineAngle(:,i) > max(cosineAngle(:,i))*0.99993,i),:);
         testPts = scalp_surface(indOnScalpSurf(cosineAngle(:,i) > prctile(cosineAngle(:,i),99.99),i),:);
         [~,indFarthestOnTestPts] = map2Points(center,testPts,'farthest');
         idx(i) = indOnScalpSurf(indFarthestOnTestPts,i);

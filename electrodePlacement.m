@@ -88,6 +88,7 @@ if ~isempty(indP)
            isBiosemi = 0;
            isEGI = 1;
    end
+   disp(['Using ' elecPara(1).capType]);
    [electrode_coord_P,center_P]= fitCap2individual(scalp,scalp_surface,landmarks,P2,capInfo,indP,isBiosemi,isEGI);
 else
     electrode_coord_P = []; center_P = [];

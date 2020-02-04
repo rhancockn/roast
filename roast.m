@@ -2,57 +2,57 @@ function roast(subj,recipe,varargin)
 % roast(subj,recipe,varargin)
 %
 % Main function of ROAST.
-% 
+%
 % Please refer to the README.md on the github repo for better formated
 % documentations: https://github.com/andypotatohy/roast
-% 
+%
 % If you use ROAST in your research, please cite these:
-% 
+%
 % Huang, Y., Datta, A., Bikson, M., Parra, L.C., Realistic vOlumetric-Approach
 % to Simulate Transcranial Electric Stimulation -- ROAST -- a fully automated
 % open-source pipeline, Journal of Neural Engineering, Vol. 16, No. 5, 2019 (prefered reference)
-% 
+%
 % Huang, Y., Datta, A., Bikson, M., Parra, L.C., ROAST: an open-source,
 % fully-automated, Realistic vOlumetric-Approach-based Simulator for TES,
 % Proceedings of the 40th Annual International Conference of the IEEE Engineering
 % in Medicine and Biology Society, Honolulu, HI, July 2018
-% 
+%
 % If you use New York head to run simulation, please also cite the following:
 % Huang, Y., Parra, L.C., Haufe, S.,2016. The New York Head - A precise
 % standardized volume conductor model for EEG source localization and tES
 % targeting, NeuroImage,140, 150-162
-% 
+%
 % If you also use the targeting feature (`roast_target`), please cite these:
-% 
-% Dmochowski, J.P., Datta, A., Bikson, M., Su, Y., Parra, L.C., Optimized 
+%
+% Dmochowski, J.P., Datta, A., Bikson, M., Su, Y., Parra, L.C., Optimized
 % multi-electrode stimulation increases focality and intensity at target,
 % Journal of Neural Engineering 8 (4), 046011, 2011
-% 
+%
 % Dmochowski, J.P., Datta, A., Huang, Y., Richardson, J.D., Bikson, M.,
-% Fridriksson, J., Parra, L.C., Targeted transcranial direct current stimulation 
+% Fridriksson, J., Parra, L.C., Targeted transcranial direct current stimulation
 % for rehabilitation after stroke, NeuroImage, 75, 12-19, 2013
-% 
+%
 % Huang, Y., Thomas, C., Datta, A., Parra, L.C., Optimized tDCS for Targeting
 % Multiple Brain Regions: An Integrated Implementation. Proceedings of the 40th
 % Annual International Conference of the IEEE Engineering in Medicine and Biology
 % Society, Honolulu, HI, July 2018, 3545-3548
-% 
-% ROAST was supported by NIH through grants R01MH111896, R01MH111439, 
+%
+% ROAST was supported by NIH through grants R01MH111896, R01MH111439,
 % R01NS095123, R44NS092144, R41NS076123, and by Soterix Medical Inc.
-% 
+%
 % General Public License version 3 or later. See LICENSE.md for details.
-% 
+%
 % This software uses free packages from the Internet, except Matlab, which
 % is a proprietary software by the MathWorks. You need a valid Matlab license
 % to run this software.
-% 
+%
 % ROAST is considered as an "aggregate" rather than "derived work", based on
 % the definitions in GPL FAQ. The ROAST license only applies to the scripts,
-% documentation and the individual MRI data under example/ folder in this 
-% package and excludes those programs stored in the lib/ directory. The software 
+% documentation and the individual MRI data under example/ folder in this
+% package and excludes those programs stored in the lib/ directory. The software
 % under lib/ follow their respective licenses. This software is only intended
 % for non-commercial use.
-% 
+%
 % (c) Yu (Andy) Huang, Parra Lab at CCNY
 % yhuang16@citymail.cuny.edu
 % September 2019
@@ -412,14 +412,26 @@ if any(~strcmpi(recipe,'leadfield'))
         'elecSize',elecSize,'elecOri',elecOri);
     
 else
-    
-    fid = fopen('./elec72.loc'); C = textscan(fid,'%d %f %f %s'); fclose(fid);
-    elecName = C{4}; for i=1:length(elecName), elecName{i} = strrep(elecName{i},'.',''); end
-    capType = '1010';
-    elecType = 'disc';
-    elecSize = [6 2];
-    elecOri = [];
-    
+    % setup the electrodes and leadfield for targeting
+    if exist('capType', 'var') && strcmp(capType, 'egi')
+        elecType = 'disc';
+        elecSize = [6 5];
+        elecOri = [];
+        capType = 'egi';
+        fp = fopen('egi_sources.txt');
+        elecName = textscan(fp, '%s');
+        fclose(fp);
+        elecName = elecName{1};
+        elecName = elecName(4:2:end); %subsample electrodes since they overlap on the MNI head
+    else
+        fid = fopen('./elec72.loc'); C = textscan(fid,'%d %f %f %s'); fclose(fid);
+        elecName = C{4}; for i=1:length(elecName), elecName{i} = strrep(elecName{i},'.',''); end
+        capType = '1010';
+        elecType = 'disc';
+        elecSize = [6 2];
+        elecOri = [];
+
+    end
     elecPara = struct('capType',capType,'elecType',elecType,...
         'elecSize',elecSize,'elecOri',elecOri);
     
@@ -434,62 +446,62 @@ else
     if t2Data.hdr.hist.qoffset_x == 0 && t2Data.hdr.hist.srow_x(4)==0
         error('The MRI has a bad header. SPM cannot generate the segmentation properly for MRI with bad header. You can manually align the MRI in SPM Display function to fix the header.');
     end
-    % check if bad MRI header    
+    % check if bad MRI header
 end
 
 % if any(~strcmpi(recipe,'leadfield'))
-    
-    if ~exist('meshOpt','var')
-%         meshOpt = struct('radbound',5,'angbound',30,'distbound',0.4,'reratio',3,'maxvol',10);
-          meshOpt = struct('radbound',5,'angbound',30,'distbound',0.3,'reratio',3,'maxvol',10);
-          % mesh option defaults changed for higher-resolution mesh in version 3
-%         meshOpt = struct('radbound',3,'angbound',30,'distbound',0.3,'reratio',3,'maxvol',5);
-    else
-        if ~isstruct(meshOpt), error('Unrecognized format of mesh options. Please enter as a structure, with field names as ''radbound'', ''angbound'', ''distbound'', ''reratio'', and ''maxvol''. Please refer to the iso2mesh documentation for more details.'); end
-        meshOptNam = fieldnames(meshOpt);
-        if isempty(meshOptNam) || ~all(ismember(meshOptNam,{'radbound';'angbound';'distbound';'reratio';'maxvol'}))
-            error('Unrecognized mesh options detected. Supported mesh options are ''radbound'', ''angbound'', ''distbound'', ''reratio'', and ''maxvol''. Please refer to the iso2mesh documentation for more details.');
-        end
-        if ~isfield(meshOpt,'radbound')
-            meshOpt.radbound = 5;
-        else
-            if ~isnumeric(meshOpt.radbound) || meshOpt.radbound<=0
-                error('Please enter a positive number for the mesh option ''radbound''.');
-            end
-        end
-        if ~isfield(meshOpt,'angbound')
-            meshOpt.angbound = 30;
-        else
-            if ~isnumeric(meshOpt.angbound) || meshOpt.angbound<=0
-                error('Please enter a positive number for the mesh option ''angbound''.');
-            end
-        end
-        if ~isfield(meshOpt,'distbound')
-            meshOpt.distbound = 0.3;
-        else
-            if ~isnumeric(meshOpt.distbound) || meshOpt.distbound<=0
-                error('Please enter a positive number for the mesh option ''distbound''.');
-            end
-        end
-        if ~isfield(meshOpt,'reratio')
-            meshOpt.reratio = 3;
-        else
-            if ~isnumeric(meshOpt.reratio) || meshOpt.reratio<=0
-                error('Please enter a positive number for the mesh option ''reratio''.');
-            end
-        end
-        if ~isfield(meshOpt,'maxvol')
-            meshOpt.maxvol = 10;
-        else
-            if ~isnumeric(meshOpt.maxvol) || meshOpt.maxvol<=0
-                error('Please enter a positive number for the mesh option ''maxvol''.');
-            end
-        end
-        warning('You''re changing the advanced options of ROAST. Unless you know what you''re doing, please keep mesh options default.');
+
+if ~exist('meshOpt','var')
+    %         meshOpt = struct('radbound',5,'angbound',30,'distbound',0.4,'reratio',3,'maxvol',10);
+    meshOpt = struct('radbound',5,'angbound',30,'distbound',0.3,'reratio',3,'maxvol',10);
+    % mesh option defaults changed for higher-resolution mesh in version 3
+    %         meshOpt = struct('radbound',3,'angbound',30,'distbound',0.3,'reratio',3,'maxvol',5);
+else
+    if ~isstruct(meshOpt), error('Unrecognized format of mesh options. Please enter as a structure, with field names as ''radbound'', ''angbound'', ''distbound'', ''reratio'', and ''maxvol''. Please refer to the iso2mesh documentation for more details.'); end
+    meshOptNam = fieldnames(meshOpt);
+    if isempty(meshOptNam) || ~all(ismember(meshOptNam,{'radbound';'angbound';'distbound';'reratio';'maxvol'}))
+        error('Unrecognized mesh options detected. Supported mesh options are ''radbound'', ''angbound'', ''distbound'', ''reratio'', and ''maxvol''. Please refer to the iso2mesh documentation for more details.');
     end
-    
+    if ~isfield(meshOpt,'radbound')
+        meshOpt.radbound = 5;
+    else
+        if ~isnumeric(meshOpt.radbound) || meshOpt.radbound<=0
+            error('Please enter a positive number for the mesh option ''radbound''.');
+        end
+    end
+    if ~isfield(meshOpt,'angbound')
+        meshOpt.angbound = 30;
+    else
+        if ~isnumeric(meshOpt.angbound) || meshOpt.angbound<=0
+            error('Please enter a positive number for the mesh option ''angbound''.');
+        end
+    end
+    if ~isfield(meshOpt,'distbound')
+        meshOpt.distbound = 0.3;
+    else
+        if ~isnumeric(meshOpt.distbound) || meshOpt.distbound<=0
+            error('Please enter a positive number for the mesh option ''distbound''.');
+        end
+    end
+    if ~isfield(meshOpt,'reratio')
+        meshOpt.reratio = 3;
+    else
+        if ~isnumeric(meshOpt.reratio) || meshOpt.reratio<=0
+            error('Please enter a positive number for the mesh option ''reratio''.');
+        end
+    end
+    if ~isfield(meshOpt,'maxvol')
+        meshOpt.maxvol = 10;
+    else
+        if ~isnumeric(meshOpt.maxvol) || meshOpt.maxvol<=0
+            error('Please enter a positive number for the mesh option ''maxvol''.');
+        end
+    end
+    warning('You''re changing the advanced options of ROAST. Unless you know what you''re doing, please keep mesh options default.');
+end
+
 % else
-%     
+%
 % end
 
 if ~exist('simTag','var'), simTag = []; end
@@ -517,7 +529,7 @@ end
 
 if ~exist('conductivities','var')
     conductivities = struct('white',0.126,'gray',0.276,'csf',1.65,'bone',0.01,...
-                           'skin',0.465,'air',2.5e-14,'gel',0.3,'electrode',5.9e7); % literature values
+        'skin',0.465,'air',2.5e-14,'gel',0.3,'electrode',5.9e7); % literature values
 else
     if ~isstruct(conductivities), error('Unrecognized format of conductivity values. Please enter as a structure, with field names as ''white'', ''gray'', ''csf'', ''bone'', ''skin'', ''air'', ''gel'' and ''electrode''.'); end
     conductivitiesNam = fieldnames(conductivities);
@@ -579,7 +591,7 @@ else
             error('Please enter a positive number for the gel conductivity.');
         end
         if length(conductivities.gel(:))>1 && length(conductivities.gel(:))~=length(elecName)
-           error('You want to assign different conductivities to the conducting media under different electrodes, but didn''t tell ROAST clearly which conductivity each electrode should use. Please follow the order of electrodes you put in ''recipe'' to give each of them the corresponding conductivity in a vector as the value for the ''gel'' field in option ''conductivities''.');
+            error('You want to assign different conductivities to the conducting media under different electrodes, but didn''t tell ROAST clearly which conductivity each electrode should use. Please follow the order of electrodes you put in ''recipe'' to give each of them the corresponding conductivity in a vector as the value for the ''gel'' field in option ''conductivities''.');
         end
     end
     if ~isfield(conductivities,'electrode')
@@ -589,7 +601,7 @@ else
             error('Please enter a positive number for the electrode conductivity.');
         end
         if length(conductivities.electrode(:))>1 && length(conductivities.electrode(:))~=length(elecName)
-           error('You want to assign different conductivities to different electrodes, but didn''t tell ROAST clearly which conductivity each electrode should use. Please follow the order of electrodes you put in ''recipe'' to give each of them the corresponding conductivity in a vector as the value for the ''electrode'' field in option ''conductivities''.');
+            error('You want to assign different conductivities to different electrodes, but didn''t tell ROAST clearly which conductivity each electrode should use. Please follow the order of electrodes you put in ''recipe'' to give each of them the corresponding conductivity in a vector as the value for the ''electrode'' field in option ''conductivities''.');
         end
     end
     warning('You''re changing the advanced options of ROAST. Unless you know what you''re doing, please keep conductivity values default.');
@@ -610,7 +622,7 @@ if ~strcmpi(subj,'example/nyhead.nii') % only when it's not NY head
         error('The MRI has a bad header. SPM cannot generate the segmentation properly for MRI with bad header. You can manually align the MRI in SPM Display function to fix the header.');
     end
     % check if bad MRI header
-
+    
     if any(t1Data.hdr.dime.pixdim(2:4)<0.8) && ~doResamp
         warning('The MRI has higher resolution (<0.8mm) in at least one direction. This will make the modeling process more computationally expensive and thus slower. If you wish to run faster using just 1-mm model, you can ask ROAST to re-sample the MRI into 1 mm first, by turning on the ''resampling'' option.');
     end
@@ -624,7 +636,7 @@ if ~strcmpi(subj,'example/nyhead.nii') % only when it's not NY head
     [subjRas,isNonRAS] = convertToRAS(subj);
     % check if in non-RAS orientation, and if yes, put it into RAS
     
-    [subjRasRS,doResamp] = resampToOneMM(subjRas,doResamp);    
+    [subjRasRS,doResamp] = resampToOneMM(subjRas,doResamp);
     
     if paddingAmt>0
         subjRasRSPD = zeroPadding(subjRasRS,paddingAmt);
@@ -664,10 +676,10 @@ else
     end
     
     if ~isempty(T2)
-       warning('New York head selected. Any specified T2 image will be ignored.');
-       T2 = [];
+        warning('New York head selected. Any specified T2 image will be ignored.');
+        T2 = [];
     end
-        
+    
 end
 
 % preprocess electrodes
@@ -687,9 +699,9 @@ if any(~strcmpi(recipe,'leadfield'))
 else
     
     elecNameOri = elecName; % back up for re-ordering solutions back to .loc file order;
-                            % this is ugly, as .loc file has a different order of electrodes
-                            % for historical reasons;
-                            % HDE follows .loc file; ROAST follows capInfo.xls
+    % this is ugly, as .loc file has a different order of electrodes
+    % for historical reasons;
+    % HDE follows .loc file; ROAST follows capInfo.xls
     elecName = elecName(indInUsrInput);
     configTxt = 'leadFieldGeneration';
     
@@ -754,7 +766,12 @@ fprintf('\n\n');
 
 % warn users lead field will take a long time to generate
 if all(strcmpi(recipe,'leadfield'))
-    [~,indRef] = ismember('Iz',elecName);
+    if strcmp(capType, 'egi')
+        % todo should be E147 for comaprison
+        [~,indRef] = ismember('E146',elecName);
+    else
+        [~,indRef] = ismember('Iz',elecName);
+    end
     indStimElec = setdiff(1:length(elecName),indRef);
     [isInRoastCore,indInRoastCore] = ismember(elecNameOri,elecName(indStimElec));
     isSolved = zeros(length(indStimElec),1);
@@ -818,7 +835,7 @@ else
     disp('======================================================')
     disp('         ELECTRODE ALREADY PLACED, SKIP STEP 3        ')
     disp('======================================================')
-%     load([dirname filesep baseFilename '_' uniqueTag '_labelVol.mat'],'volume_elecLabel','volume_gelLabel');
+    %     load([dirname filesep baseFilename '_' uniqueTag '_labelVol.mat'],'volume_elecLabel','volume_gelLabel');
     load([dirname filesep baseFilenameRasRSPD '_header.mat'],'hdrInfo');
 end
 
